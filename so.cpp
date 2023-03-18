@@ -2,48 +2,75 @@
 #include "jthread.hpp"
 #include <chrono>
 #include <cstdlib>
+#include <queue>
+#include <mutex>
 
-int task_time = 5;
-int beer = 5;
+std::queue<int> timetable;
+std::queue<int> beertable;
+std::mutex myMutex;
 
-void project_manager() {
+void project_manager(int id) {
     while(true){
-        if(task_time==0){
-        task_time = rand() % 10 + 1;
-        std::cout << "\nProject manager is sleeping for 2000 seconds";
-        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        timetable.push(rand() % 10 + 1);
+        std::cout << "PM id: " << id << std::endl;
+    }
+}
+
+void beer_manager(int id) {
+    while(true){
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        beertable.push(rand() % 10 + 1);
+        std::cout << "Beer id: " << id << std::endl;
+    }
+}
+
+void worker(int id) {
+    while(true){
+        if (beertable.size() > 0 && timetable.size() > 0) {
+          // std::unique_lock<std::mutex> ul(myMutex);
+          std::cout << "Worker:" << beertable.front() * timetable.front() << " id: " << id << std::endl;
+          beertable.pop();
+          timetable.pop();
+          // ul.unlock();
         }
     }
 }
-void worker() {
-    while(true){
-        std::cout << "\nWorker is sleeping for " << 1000*task_time*beer << " seconds";
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000*task_time*beer));
-        task_time = 0;
-        beer = 0;
-    }
-}
-void beer_manager() {
-    while(true){
-        if(beer==0){
-        beer = rand() % 10 + 1;
-        std::cout << "\nBeer manager is sleeping for " << 1000*beer << " seconds";
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000*beer));
-        }
-    }
-    
+
+void printQueue() {
+  while (true) {
+    std::cout << timetable.size() << std::endl;
+  }
 }
 
 int main() {
-    // Create two jthreads
-    std::jthread thread1(worker);
-    std::jthread thread2(project_manager);
-    std::jthread thread3(beer_manager);
+    std::jthread worker_1(worker, 1);
+    std::jthread worker_2(worker, 2);
+    std::jthread worker_3(worker, 3);
 
-    // Wait for the threads to finish
-    thread1.join();
-    thread2.join();
-    thread3.join();
+    std::jthread pm_1(project_manager, 1);
+    std::jthread pm_2(project_manager, 2);
+    std::jthread pm_3(project_manager, 3);
+
+    std::jthread bm_1(beer_manager, 1);
+    std::jthread bm_2(beer_manager, 2);
+    std::jthread bm_3(beer_manager, 3);
+
+    // std::jthread pr(printQueue);
+
+    // pr.join();
+
+    pm_1.join();
+    pm_2.join();
+    pm_3.join();
+
+    bm_1.join();
+    bm_2.join();
+    bm_3.join();
+
+    worker_1.join();
+    worker_2.join();
+    worker_3.join();
 
     std::cout << "All threads finished" << std::endl;
 
