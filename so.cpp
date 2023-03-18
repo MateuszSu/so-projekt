@@ -4,135 +4,109 @@
 #include <cstdlib>
 #include <queue>
 #include <mutex>
+#include <pthread.h>
 
-std::queue<int> timetable;
+//int max_size = 100;
+std::queue<int> tasktable;
 std::queue<int> beertable;
-std::mutex myMutex;
+pthread_mutex_t myMutex;
+pthread_mutex_t beer_mutex;
+pthread_mutex_t task_mutex;
+pthread_cond_t	beer_is_empty = PTHREAD_COND_INITIALIZER;
+pthread_cond_t	task_is_empty = PTHREAD_COND_INITIALIZER;
+pthread_cond_t	beer_is_full = PTHREAD_COND_INITIALIZER;
+pthread_cond_t	task_is_full = PTHREAD_COND_INITIALIZER;
+
 
 void project_manager(int id) {
     while(true){
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        timetable.push(rand() % 10 + 1);
-        std::cout << "PM id: " << id << std::endl;
+        pthread_mutex_lock(&task_mutex);
+        if(tasktable.size() < 100){
+            std::this_thread::sleep_for(std::chrono::milliseconds(rand() % 100 + 1));
+            std::cout<<"dodano task\n";
+            tasktable.push(rand() % 10 + 1);
+            pthread_cond_signal(&task_is_empty);
+        }
+        else{
+            std::cout<<"czekam na wykonanie taska: "<<id<<std::endl;
+            pthread_cond_wait(&task_is_full, &task_mutex);
+        }
+        pthread_mutex_unlock(&task_mutex);
     }
 }
 
 void beer_manager(int id) {
     while(true){
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        beertable.push(rand() % 10 + 1);
-        std::cout << "Beer id: " << id << std::endl;
+        pthread_mutex_lock(&beer_mutex);
+        if(beertable.size() < 100){
+            std::this_thread::sleep_for(std::chrono::milliseconds(rand() % 100 + 1));
+            std::cout<<"dodano piwo\n";
+            beertable.push(rand() % 10 + 1);
+            pthread_cond_signal(&beer_is_empty);
+        }
+        else{
+            std::cout<<"czekam na wypicie piwa: "<<id<<std::endl;
+            pthread_cond_wait(&beer_is_full, &beer_mutex);
+        }
+        pthread_mutex_unlock(&beer_mutex);
     }
 }
 
 void worker(int id) {
     while(true){
-        if (beertable.size() > 0 && timetable.size() > 0) {
-          // std::unique_lock<std::mutex> ul(myMutex);
-          std::cout << "Worker:" << beertable.front() * timetable.front() << " id: " << id << std::endl;
-          beertable.pop();
-          timetable.pop();
-          // ul.unlock();
+        pthread_mutex_lock(&myMutex);
+        if (beertable.size() > 0) {
+            if(tasktable.size() > 0){
+                std::this_thread::sleep_for(std::chrono::milliseconds(1*beertable.front()*tasktable.front()));
+                std::cout<<"wykonano task\n";
+                beertable.pop();
+                tasktable.pop();
+                pthread_cond_signal(&task_is_full);
+                pthread_cond_signal(&beer_is_full);
+            }
+            else{
+                std::cout<<"czekam na taski: "<<id<<std::endl;
+                pthread_cond_wait(&task_is_empty, &myMutex);
+            }
+          
         }
+        else{
+            std::cout<<"czekam na piwo: "<<id<<std::endl;
+			pthread_cond_wait(&beer_is_empty, &myMutex);
+        }
+        pthread_mutex_unlock(&myMutex);
     }
 }
 
-void printQueue() {
-  while (true) {
-    std::cout << timetable.size() << std::endl;
-  }
-}
 
-int main() {
-    std::jthread worker_1(worker, 1);
-    std::jthread worker_2(worker, 2);
-    std::jthread worker_3(worker, 3);
+int main(int argc, char *argv[]) {
 
-    std::jthread pm_1(project_manager, 1);
-    std::jthread pm_2(project_manager, 2);
-    std::jthread pm_3(project_manager, 3);
+    std::vector<std::jthread> workers;
+    std::vector<std::jthread> project_managers;
+    std::vector<std::jthread> beer_managers;
 
-    std::jthread bm_1(beer_manager, 1);
-    std::jthread bm_2(beer_manager, 2);
-    std::jthread bm_3(beer_manager, 3);
-
-    // std::jthread pr(printQueue);
-
-    // pr.join();
-
-    pm_1.join();
-    pm_2.join();
-    pm_3.join();
-
-    bm_1.join();
-    bm_2.join();
-    bm_3.join();
-
-    worker_1.join();
-    worker_2.join();
-    worker_3.join();
-
-    std::cout << "All threads finished" << std::endl;
-
-    return 0;
-}
-/*
-#include <cstdlib>
-#include <iostream>
-#include <mutex>
-#include <thread>
-#include <chrono>
-using namespace std;
-
-std::mutex g_mutex;
-bool g_ready = false;
-int g_data = 0;
-
-int produceData() {
-  int randomNumber = rand() % 1000;
-  std::cout << "produce data: " << randomNumber << "\n";
-  return randomNumber;
-}
-
-void consumeData(int data) { std::cout << "receive data: " << data << "\n"; }
-
-// consumer thread function
-void consumer() {
-  while (true) {
-    while (!g_ready) {
-      // sleep for 1 second
-      std::this_thread::sleep_for (std::chrono::seconds(1));
+    for(int i = 0; i<*argv[0]; i++){
+        workers.push_back(std::jthread(worker, i));
     }
-    std::unique_lock<std::mutex> ul(g_mutex);
-    consumeData(g_data);
-    g_ready = false;
-  }
-}
 
-// producer thread function
-void producer() {
-  while (true) {
-    std::unique_lock<std::mutex> ul(g_mutex);
-
-    g_data = produceData();
-    g_ready = true;
-    ul.unlock();
-    while (g_ready) {
-      // sleep for 1 second
-      std::this_thread::sleep_for (std::chrono::seconds(1));
+    for(int i = 0; i<*argv[1]; i++){
+        project_managers.push_back(std::jthread(project_manager, i));
     }
-  }
+
+    for(int i = 0; i<*argv[2]; i++){
+        beer_managers.push_back(std::jthread(beer_manager, i));
+    }
+
+    for(int i = 0; i<*argv[0]; i++){
+        workers[i].join();
+    }
+
+    for(int i = 0; i<*argv[1]; i++){
+        project_managers[i].join();
+    }
+
+    for(int i = 0; i<*argv[2]; i++){
+        beer_managers[i].join();
+    }
+    
 }
-
-void consumerThread() { consumer(); }
-
-void producerThread() { producer(); }
-
-int main() {
-  std::thread t1(consumerThread);
-  std::thread t2(producerThread);
-  t1.join();
-  t2.join();
-  return 0;
-}
-*/
