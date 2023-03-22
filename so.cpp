@@ -6,7 +6,6 @@
 #include <mutex>
 #include <pthread.h>
 
-//int max_size = 100;
 std::queue<int> tasktable;
 std::queue<int> beertable;
 pthread_mutex_t myMutex;
@@ -16,7 +15,6 @@ pthread_cond_t	beer_is_empty = PTHREAD_COND_INITIALIZER;
 pthread_cond_t	task_is_empty = PTHREAD_COND_INITIALIZER;
 pthread_cond_t	beer_is_full = PTHREAD_COND_INITIALIZER;
 pthread_cond_t	task_is_full = PTHREAD_COND_INITIALIZER;
-
 
 void project_manager(int id) {
     while(true){
@@ -50,6 +48,7 @@ void beer_manager(int id) {
         }
         pthread_mutex_unlock(&beer_mutex);
     }
+
 }
 
 void worker(int id) {
@@ -78,35 +77,32 @@ void worker(int id) {
     }
 }
 
-
-int main(int argc, char *argv[]) {
-
+int main(int argc, char **argv) {
     std::vector<std::jthread> workers;
     std::vector<std::jthread> project_managers;
     std::vector<std::jthread> beer_managers;
 
-    for(int i = 0; i<*argv[0]; i++){
+    for(int i = 0; i<std::stoi(std::string(argv[1])); i++){
         workers.push_back(std::jthread(worker, i));
     }
 
-    for(int i = 0; i<*argv[1]; i++){
+    for(int i = 0; i<std::stoi(std::string(argv[2])); i++){
         project_managers.push_back(std::jthread(project_manager, i));
     }
 
-    for(int i = 0; i<*argv[2]; i++){
+    for(int i = 0; i<std::stoi(std::string(argv[3])); i++){
         beer_managers.push_back(std::jthread(beer_manager, i));
     }
 
-    for(int i = 0; i<*argv[0]; i++){
+    for(int i = 0; i<std::stoi(std::string(argv[1])); i++){
         workers[i].join();
     }
 
-    for(int i = 0; i<*argv[1]; i++){
+    for(int i = 0; i<std::stoi(std::string(argv[2])); i++){
         project_managers[i].join();
     }
 
-    for(int i = 0; i<*argv[2]; i++){
+    for(int i = 0; i<std::stoi(std::string(argv[3])); i++){
         beer_managers[i].join();
     }
-    
 }
